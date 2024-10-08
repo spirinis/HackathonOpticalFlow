@@ -108,8 +108,9 @@ def draw_hsv(flow):
 
     return bgr
 
-def calculate_optical_flow(prev, next, flow = None, pyr_scale = 0.5, levels = 3, winsize = 15, iterations = 3 ,
-                           poly_n = 5, poly_sigma = 1.2, flags = 0):
+
+def calculate_optical_flow(prev, next, flow=None, pyr_scale=0.5, levels=3, winsize=15, iterations=3,
+                           poly_n=5, poly_sigma=1.2, flags=0):
     """
     //TODO
     :param prev:
@@ -124,17 +125,17 @@ def calculate_optical_flow(prev, next, flow = None, pyr_scale = 0.5, levels = 3,
     :param flags:
     :return:
     """
-    flow = cv2.calcOpticalFlowFarneback(prev = prev,
-                                        next = next,
-                                        flow = flow,
-                                        pyr_scale = pyr_scale,
-                                        levels =levels ,
-                                        winsize = winsize,
-                                        iterations = iterations,
-                                        poly_n = poly_n,
-                                        poly_sigma = poly_sigma,
-                                        flags = flags)
-    return  flow
+    flow = cv2.calcOpticalFlowFarneback(prev=prev,
+                                        next=next,
+                                        flow=flow,
+                                        pyr_scale=pyr_scale,
+                                        levels=levels ,
+                                        winsize=winsize,
+                                        iterations=iterations,
+                                        poly_n=poly_n,
+                                        poly_sigma=poly_sigma,
+                                        flags=flags)
+    return flow
 
 
 def draw_contours(img_grey):
