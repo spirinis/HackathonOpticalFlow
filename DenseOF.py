@@ -49,11 +49,11 @@ def draw_grid(img_shape, step=20, colored_cross=False,
     """Возвращает слой с сеткой"""
     h, w = img_shape
     img_bgr = np.zeros((h, w, 3), np.uint8)
-    x_lines = np.int32([[[i, 0], [i, h]] for i in range(step, w, step)])
-    y_lines = np.int32([[[0, i], [w, i]] for i in range(step, h, step)])
 
     if grid:
         # сетка пикселей, а то я не вижу, куда что рисовать BGR
+        x_lines = np.int32([[[i, 0], [i, h]] for i in range(step, w, step)])
+        y_lines = np.int32([[[0, i], [w, i]] for i in range(step, h, step)])
         cv2.polylines(img_bgr, x_lines, False, (100, 100, 100), 1)
         cv2.polylines(img_bgr, y_lines, False, (100, 100, 100), 1)
     if cross:
@@ -109,6 +109,24 @@ def draw_hsv(flow):
     return bgr
 
 
+def draw_contours(img_grey):
+    thresh = 100
+    ret, thresh_img = cv2.threshold(img_grey, thresh, 255, cv2.THRESH_BINARY)
+    # cv2.imshow('contours', contours_frame)
+    contours_, hierarchy_ = cv2.findContours(thresh_img, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+    contours_long, contours_short = [], []
+    for cont in contours_:
+        (contours_long, contours_short)[len(cont) < 10].append(cont)
+
+    # contours1, contours2 = filter(lambda i: len(i) > 6, contours1)
+    h, w = img_grey.shape[:2]
+    img_contours = np.zeros((h, w, 3), np.uint8)
+    cv2.drawContours(img_contours, contours_long, -1, (255, 255, 255), 1)
+    cv2.drawContours(img_contours, contours_short, -1, (0, 0, 255), 1)
+
+    return img_contours, contours_, hierarchy_
+
+
 # МЕНЮ НАСТРОЙКИ
 add_flow = False
 add_hsv = False
@@ -121,7 +139,7 @@ match 1:  # СЮДА МЕНЯТЬ
     case 1:
         cap = cv2.VideoCapture("./PERFECT_BANDO_FPV_FREESTYLE.mp4")
         # будка с дыркой 400 620 640 дом 1000 1130 1200 завод 1440 1550 1600 1900 дверь 1990 ангар 2400 2500 крыша 2875
-        start_frame = 0
+        start_frame = 1300
         viewing_angle = 155
     case 2:
         cap = cv2.VideoCapture("./Полёт д1.mp4")
@@ -141,6 +159,7 @@ half_height = int(height/2)
 viewing_angle_req = 60
 frame_queue = []
 
+# проецировать векторы на ось из-за кадра к точке направления
 # инструкция
 print('Пробел - пауза, 1 - добавить стрелочки, 2 - добавить HSV, 3 - окно HSV, Q/Esc - закрыть окна')
 print('Кадров', length, 'Ширина', width, 'Высота', height, 'FPS', video_fps)
@@ -165,7 +184,7 @@ while go:
     if not suc:
         end_video = time.time()
         cv2.waitKey(0)
-        print(int(start_video - end_video), "секунд показа")
+        print(int(end_video - start_video), "секунд показа")
         print("Спасибо за внимание")
         break
 
@@ -180,7 +199,7 @@ while go:
     # Сравнение кадров попиксельно
     # print(f"{cap.get(cv2.CAP_PROP_POS_FRAMES):.0f} кадр", abs(sum(sum(prev_gray - gray))))
 
-    # считаем поток, только если его нужно отображать (буст)
+    # считаем поток, только если его нужно отображать (буст)old
     if add_flow or add_hsv or show_hsv:
         flow = cv2.calcOpticalFlowFarneback(prev_gray, gray, None, 0.5, 3, 15, 3,
                                             5, 1.2, 0)
@@ -195,7 +214,10 @@ while go:
     if add_hsv:
         output_bgr_gray = cv2.add(output_bgr_gray, draw_hsv(flow))
     if show_hsv:
-        cv2.imshow('flow HSV', draw_hsv(flow))
+        cv2.imshow('flow HSV', cv2.add(draw_hsv(flow), draw_grid((height, width), colored_cross=True, cross=True,)))
+
+    contours_frame, contours, hierarchy = draw_contours(gray)
+    cv2.imshow('contours', contours_frame)
 
     # Конец кода для прототипа. Конечное время вычислений, большинство из которых планируется делать на устройстве
     # Текстовая информация в углу
