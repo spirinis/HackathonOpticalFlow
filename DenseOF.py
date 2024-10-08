@@ -108,6 +108,34 @@ def draw_hsv(flow):
 
     return bgr
 
+def calculate_optical_flow(prev, next, flow = None, pyr_scale = 0.5, levels = 3, winsize = 15, iterations = 3 ,
+                           poly_n = 5, poly_sigma = 1.2, flags = 0):
+    """
+    //TODO
+    :param prev:
+    :param next:
+    :param flow:
+    :param pyr_scale:
+    :param levels:
+    :param winsize:
+    :param iterations:
+    :param poly_n:
+    :param poly_sigma:
+    :param flags:
+    :return:
+    """
+    flow = cv2.calcOpticalFlowFarneback(prev = prev,
+                                        next = next,
+                                        flow = flow,
+                                        pyr_scale = pyr_scale,
+                                        levels =levels ,
+                                        winsize = winsize,
+                                        iterations = iterations,
+                                        poly_n = poly_n,
+                                        poly_sigma = poly_sigma,
+                                        flags = flags)
+    return  flow
+
 
 def draw_contours(img_grey):
     thresh = 100
@@ -201,8 +229,7 @@ while go:
 
     # считаем поток, только если его нужно отображать (буст)old
     if add_flow or add_hsv or show_hsv:
-        flow = cv2.calcOpticalFlowFarneback(prev_gray, gray, None, 0.5, 3, 15, 3,
-                                            5, 1.2, 0)
+        flow =calculate_optical_flow(prev = prev_gray, next = gray)
 
     prev_gray = gray
 
