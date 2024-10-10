@@ -2,6 +2,17 @@ import numpy as np
 import cv2
 import time
 import sys
+
+# МЕНЮ НАСТРОЙКИ
+add_flow = False
+add_hsv = False
+show_hsv = False
+show_contours = False
+show_colored = 1
+
+viewing_angle_req = 60
+frame_queue = []
+
 """
 176 x 144 пикселей Quarter CIF
 320 x 144 пикселей
@@ -116,18 +127,22 @@ def draw_hsv(flow_):
 def calculate_optical_flow(prev, next, flow=None, pyr_scale=0.5, levels=3, winsize=15, iterations=3,
                            poly_n=5, poly_sigma=1.2, flags=0):
     """
-    //
-    :param prev:
-    :param next:
-    :param flow:
-    :param pyr_scale:
-    :param levels:
-    :param winsize:
-    :param iterations:
-    :param poly_n:
-    :param poly_sigma:
-    :param flags:
-    :return:
+    Вычисляет оптический поток.
+
+    args:
+    - prev : Предыдущий кадр в оттенках серого.
+    - next : Текущий кадр в оттенках серого.
+    - flow (Optional): Массив для сохранения результата потока, или None для его автоматического создания.
+    - pyr_scale (float): Коэффициент уменьшения изображения в пирамиде.
+    - levels (int): Количество уровней пирамиды.
+    - winsize (int): Размер окна для усреднения потока (больше — более грубый результат).
+    - iterations (int): Количество итераций на каждом уровне пирамиды.
+    - poly_n (int): Размер области для аппроксимации полинома. Чем больше значение, тем грубее сглаживание.
+    - poly_sigma (float): Стандартное отклонение Гауссова ядра для аппроксимации полинома.
+    - flags (int): Флаги для метода.
+    return:
+        Двумерный массив (векторы потока) размером `(h, w, 2)`, где h — высота, w — ширина,
+        и два канала представляют смещения по осям X и Y соответственно.
     """
     flow = cv2.calcOpticalFlowFarneback(prev=prev,
                                         next=next,
@@ -221,12 +236,6 @@ def draw_contours(img_grey, thresh=100):
     return img_contours, contours_, hierarchy_
 
 
-# МЕНЮ НАСТРОЙКИ
-add_flow = False
-add_hsv = False
-show_hsv = False
-show_contours = False
-show_colored = 1
 match 1:  # СЮДА МЕНЯТЬ
     case 0:
         cap = cv2.VideoCapture(0)
@@ -252,8 +261,6 @@ width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
 height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 half_width = int(width/2)
 half_height = int(height/2)
-viewing_angle_req = 60
-frame_queue = []
 
 # инструкция
 print('Пробел - пауза, ~ - 9 режимов отображения главного слоя, переключаемых нажатиями(серый,RGB,R,G,B,HSV,H,S,V),\n'
