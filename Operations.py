@@ -2,7 +2,7 @@ import numpy as np
 import cv2
 
 
-def get_and_open_image(pos=(1000, 1800), source="./PERFECT_BANDO_FPV_FREESTYLE.mp4", to_open=False):
+def get_and_open_image(pos=(1000, 1800), to_open=False, source="./PERFECT_BANDO_FPV_FREESTYLE.mp4",):
     """Вернёт и откроет при условии перечисленные кадры"""
     cap = cv2.VideoCapture(source)
     if not hasattr(pos, '__iter__'):
@@ -17,7 +17,7 @@ def get_and_open_image(pos=(1000, 1800), source="./PERFECT_BANDO_FPV_FREESTYLE.m
             print('Потеряли кадр', p)
             return
     if to_open:
-        for p, image in pos, images:
+        for p, image in zip(pos, images):
             cv2.imshow(str(p), image)
         while True:
             ch = 0xFF & cv2.waitKey(1)  # Ждём секунду

@@ -7,8 +7,8 @@ import sys
 add_flow = False
 add_hsv = False
 show_hsv = False
-show_contours = False
-show_colored = 1
+show_contours = True
+show_colored = 7
 
 viewing_angle_req = 60
 frame_queue = []
@@ -157,7 +157,14 @@ def calculate_optical_flow(prev, next, flow=None, pyr_scale=0.5, levels=3, winsi
     return flow
 
 
-def draw_contours(img_grey, thresh=100):
+# def f():
+#     p1, _st, _err = cv2.calcOpticalFlowPyrLK(img0, img1, p0, None, winSize=(15, 15), maxLevel=2,
+#                                              criteria=(cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 0.03))
+
+greys_count = None
+
+
+def draw_contours(img_grey, contour_length=150):
 
     # прикольно но долго но может пригодиться
     # def kmeans_color_quantization(image, clusters=8, rounds=1):
@@ -182,33 +189,68 @@ def draw_contours(img_grey, thresh=100):
     #     return res.reshape(image.shape+(3,))
 
     # может, имеет смысл размывать мелкие детали
-    img_grey = cv2.GaussianBlur(img_grey, (7, 7), 0)
+    # img_grey = cv2.GaussianBlur(img_grey, (7, 7), 0)
 
     # Упрощаем цвета до нескольких. Можно младшие биты цвета отбросить или:
     # 255 // div + 1 цветов на выходе
-    div = 80  # 64
-    img_div = img_grey // div * div  # получение кратного div цвета
-    max_ = max(img_div[len(img_div) // 2])
-    # смещение середины интервала цветов с шагом div от 0 в середину цветового пространства
-    img_div += (255 - max_) // 2
+    # ну ладно...
+    def calc_div(colors_count):
+        """Посчитает div по colors_count"""
+        colors_divs = {}
+        for div_ in range(1, 256):
+            colors_divs[str((lambda d: 255 // d)(div_))] = div_ + 1
+        try:
+            return colors_divs[str(colors_count)]  # = div
+        except KeyError:
+            return 'Математика не сошлась, жёсткая штука. Не делится'
 
-    def greys_count(div, step=1):
+    def greys_counter(div, step=1):
         """Посчитает и покажет цвета результата разбиения и их количество, в зависимости от div"""
         res = []
         for p in range(0, 255, step):
             res.append(p // div * div)
-        max_ = max(res)
-        res = set(list(map(lambda x: x + (255 - max_) // 2, res)))
+        # max_ = max(res)
+        # res = sorted(set(list(map(lambda x: x + (255 - max_) // 2, res))))
+        res = sorted(set(res))
         return res, len(res)
+
+    # {'255': 2, '127': 3, '85': 4, '63': 5, '51': 6, '42': 7, '36': 8, '31': 9, '28': 10, '25': 11, '23': 12, '21': 13,
+    # '19': 14, '18': 15, '17': 16, '15': 18, '14': 19, '13': 20, '12': 22, '11': 24, '10': 26, '9': 29, '8': 32,
+    # '7': 37, '6': 43, '5': 52, '4': 64, '3': 86, '2': 128, '1': 256}
+    #
+    div = 63  # 64 80 28
+    global greys_count
+    if greys_count is None:
+        greys_count = greys_counter(div)
+        print('Оттенки серого', greys_count)
+    img_div = img_grey // div * div  # получение кратного div цвета
+    # смещение середины интервала цветов с шагом div от 0 в середину цветового пространства
+    # step = len(img_div) // 5
+    # max_ = max(np.concatenate((img_div[step*1], img_div[step*2], img_div[step*3], img_div[step*4], )))
+    # img_div += (255 - max_) // 2  # С грозой
+    # h14 = cv2.calcHist([i14], [1], None, [256], [0, 256])
+    cv2.imshow('thresh_img', img_div)
 
     global thresh_img  # отладка
     # thresh_img = kmeans_color_quantization(img_grey)
 
     # ret, thresh_img = cv2.threshold(img_grey, thresh, 255, cv2.THRESH_BINARY)
-    thresh_img = img_div
+    contours_, hierarchy_ = [], []
+    for color in greys_count[0]:
+        ret, thresh_img = cv2.threshold(img_div, color, 255, cv2.THRESH_BINARY)
+        contours_i, hierarchy_i = cv2.findContours(thresh_img, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+        contours_ += contours_i
+        hierarchy_ = hierarchy_i
+        '''cv2.THRESH_BINARY — это тип порога, который преобразует все пиксели со значением больше или равным порогу в максимальное значение (обычно 255), а остальные пиксели — в 0.
+        Это наиболее распространённый тип порога для бинаризации изображений.
+        cv2.THRESH_BINARY_INV — инвертированный двоичный порог. Пиксели со значениями меньше или равными порогу становятся максимальными, а остальные — минимальными.
+        cv2.THRESH_TRUNC — этот тип порога обрезает значения пикселей до порогового значения. Все пиксели, которые больше или равны порогу, становятся равными этому порогу.
+        cv2.THRESH_TOZERO — все пиксели с интенсивностью выше порога становятся нулевыми, а все остальные остаются неизменными.
+        cv2.THRESH_TOZERO_INV — инвертирует cv2.THRESH_TOZERO, делая все пиксели ниже порога нулевыми.'''
 
-    cv2.imshow('thresh_img', thresh_img)
-    contours_, hierarchy_ = cv2.findContours(thresh_img, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+    # thresh_img = img_div
+
+    # contours_, hierarchy_ = cv2.findContours(thresh_img, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
     """RETR_EXTERNAL извлекает только крайние внешние контуры. Он устанавливает hierarchy[i][2]=hierarchy[i][3]=-1
     для всех контуров.
     RETR_LIST извлекает все контуры без установления каких-либо иерархических связей.
@@ -225,7 +267,13 @@ def draw_contours(img_grey, thresh=100):
     # фильтруем контура на длинные и короткие
     contours_long, contours_short = [], []
     for cont in contours_:
-        (contours_long, contours_short)[len(cont) < 20].append(cont)
+        len_ = len(cont)
+        # (contours_long, contours_short)[len_ < contour_length].append(cont)
+        if len_ > contour_length:
+            contours_long.append(cont)
+        else:
+            if len_ > contour_length*0.8:
+                contours_short.append(cont)
 
     # Создаём слой с контурами
     h, w = img_grey.shape[:2]
@@ -279,8 +327,8 @@ prev_gray = cv2.cvtColor(prev, cv2.COLOR_BGR2GRAY)
 # Цикл покадровой итерации
 go = True
 end_cycle = None
-# 0 сер, 1 цвет, 2R, 3G, 4B, 5 HSV, 6 оттенок, 7 насыщенность, 8 яркость,
-show_colored_iterable = [0, 1, 2, 3, 4, 5, 6, 7, 8]  # [0, 1, 5, 6, 7, 8]
+# 0 сер, 1 цвет, 2R, 3G, 4B, 5 HSV, 6 H оттенок, 7 S насыщенность, 8 V яркость,
+show_colored_iterable = [0, 1, 6, 7, 8]  # [0, 1, 2, 3, 4, 5, 6, 7, 8] [1, 6, 7, 8]
 iterator = iter(show_colored_iterable)
 # начальное время для расчёта показа (убрать)
 start_video = time.time()
@@ -313,6 +361,9 @@ while go:
         flow = calculate_optical_flow(prev=prev_gray, next=gray)
 
     prev_gray = gray
+    img_hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+    s = img_hsv[:, :, 1]
+    saturation_hsv = cv2.merge([s, s, s, ])
 
     # переключение основного выходного изображения в зависимости от кнопки ~
     output_bgr = mode = None
@@ -330,7 +381,6 @@ while go:
         z = np.zeros((height, width, 1), np.uint8)
         output_bgr = cv2.merge([img[:, :, 0], z, z, ])  # Синий
     elif (show_colored == 5) or (show_colored == 6) or (show_colored == 7) or (show_colored == 8):
-        img_hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
         if show_colored == 5:
             output_bgr = img_hsv
             mode = "HSV"
@@ -341,8 +391,7 @@ while go:
             # output_bgr = cv2.merge([z, z, img_hsv[:, :, 0], ])  # Hue оттенок
             mode = "H оттенок"
         elif show_colored == 7:
-            s = img_hsv[:, :, 1]
-            output_bgr = cv2.merge([s, s, s, ])
+            output_bgr = saturation_hsv
             # z = np.zeros((height, width, 1), np.uint8)
             # output_bgr = cv2.merge([z, img_hsv[:, :, 1], z, ])  # Saturation насыщенность
             mode = "S насыщенность"
@@ -352,8 +401,7 @@ while go:
             # z = np.zeros((height, width, 1), np.uint8)
             # output_bgr = cv2.merge([img_hsv[:, :, 2], z, z, ])  # Value яркость
             mode = "V яркость"
-        cv2.putText(output_bgr, mode, (20, 190), cv2.FONT_HERSHEY_COMPLEX,
-                    1, (0, 255, 0), 2)
+
 
     # сложение слоёв для формирования картинки
     if add_flow:
@@ -363,7 +411,7 @@ while go:
     if show_hsv:
         cv2.imshow('flow HSV', cv2.add(draw_hsv(flow), draw_grid((height, width), colored_cross=True, cross=True, )))
     if show_contours:
-        contours_frame, contours, hierarchy = draw_contours(gray)
+        contours_frame, contours, hierarchy = draw_contours(gray)  # saturation_hsv[:, :, 0])
         cv2.imshow('contours', contours_frame)
 
     # Конец кода для прототипа. Конечное время вычислений, большинство из которых планируется делать на устройстве
@@ -374,6 +422,8 @@ while go:
                 cv2.FONT_HERSHEY_COMPLEX, 1, (0, 255, 0), 2)
     cv2.putText(output_bgr, f"{time.time() - start_video:.3f} с время показа", (20, 150),
                 cv2.FONT_HERSHEY_COMPLEX, 0.6, (0, 255, 0), 1)
+    cv2.putText(output_bgr, mode, (20, 190), cv2.FONT_HERSHEY_COMPLEX,
+                1, (0, 255, 0), 2)
 
     # разметка кадра
     output_bgr = cv2.add(output_bgr, draw_grid((height, width), 20,
@@ -390,7 +440,7 @@ while go:
             if (key == ord('q')) or (key == ord('й')) or (key == 27):
                 go = False
                 break
-    if key == ord('`'):
+    if (key == ord('`')) or (key == ord('ё')):
         # if show_colored == 8:
         #     show_colored = 0
         # else:
