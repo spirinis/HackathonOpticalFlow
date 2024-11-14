@@ -5,7 +5,7 @@ import sys
 
 # МЕНЮ НАСТРОЙКИ
 add_flow = False
-add_sparse_flow = False
+add_sparse_flow = True
 add_hsv = False
 show_hsv = False
 show_contours = False
@@ -13,7 +13,7 @@ add_sparse_hsv = True
 show_lamps = False
 show_colored = 1
 # будка с дыркой 400 620 640 дом 1000 1130 1200 завод 1440 1550 1600 1900 дверь 1990 ангар 2400 2500 крыша 2875
-start_frame = 1300
+start_frame = 0  # 1650 колонны дверь
 
 viewing_angle_req = 60
 frame_queue = []
@@ -30,11 +30,6 @@ frame_queue = []
 1024 x 768 пикселей XGA
 1280 x 720 пикселей HD ready
 1920 x 1080 пикселей Full HD
-
-У нас пока есть:
-
-Кадров 1828 Ширина 1280.0 Высота 720.0 36 градусов (лол)
-Кадров 2941 Ширина 1920.0 Высота 1080.0 155 градусов
 """
 
 # проецировать векторы на ось из-за кадра к точке направления
@@ -167,33 +162,44 @@ def get_flow_lk(img1, img2, step=100):
     # img1 = imgs[0]
     # img2 = imgs[1]
     # step=100
-    h, w = img1.shape[:2]
-    frame_layer = np.zeros((h, w, 3), np.uint8)
-    points_grid = np.mgrid[step / 2:w:step, step / 2:h:step].astype(int)  # (2, 11, 19)
+    frame_layer = np.zeros((height, width, 3), np.uint8)
+    if width // step % 2 == 1:
+        indent_w = width % step / 2
+    else:
+        indent_w = (width % step + step) / 2
+    if height // step % 2 == 1:
+        indent_h = height % step / 2
+    else:
+        indent_h = (height % step + step) / 2
+    points_grid = np.mgrid[indent_w:width:step, indent_h:height:step].astype(int)  # (2, 11, 19)
     # points = points_grid.reshape(2, -1)
     # points = points_grid.reshape(-1, 2).astype(np.float32)
     points = []
     for x, y in zip(points_grid[0].flatten(), points_grid[1].flatten()):
         points.append([x, y])
     points = np.array(points).astype(np.float32).reshape(-1, 2)
+    winSize = (45, 45)
     # (-1, 2), (-1, 1), (-1, 1)
-    nextPts, status, err = cv2.calcOpticalFlowPyrLK(img2, img1, points, None, winSize=(45, 45), maxLevel=2,
+    nextPts, status, err = cv2.calcOpticalFlowPyrLK(img2, img1, points, None, winSize=winSize, maxLevel=2,
                                                     criteria=(
-                                                    cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 0.03))
-    # nextPtsr, status, err = cv2.calcOpticalFlowPyrLK(img1, img2, points, None, winSize=(15, 15), maxLevel=2,
-    #                                                 criteria=(
+                                                        cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 0.03))
+    # nextPtsr, status, err = cv2.calcOpticalFlowPyrLK(img1, img2, points, None, winSize=winSize, maxLevel=2,
+    #                                                  criteria=(
     #                                                     cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 0.03))
     # d = abs(nextPts - nextPtsr).reshape(-1, 2).max(-1)
+    # mask = np.less(d, 1)
+    # nextPts = nextPts[mask]
+    # points = points[mask]
     # good = d < 1
     flow_ = nextPts - points
     fx, fy = flow_[:, 0], flow_[:, 1]
     x, y = points[:, 0], points[:, 1]
-    ang = np.arctan2(fy, fx)
+    ang = np.arctan2(fy, fx)  # 4.71238898038469 = np.radians(270)
     ang_middle = (np.arctan2(half_height - y, half_width - x))
     modulus = np.sqrt(fx * fx + fy * fy)
     modulus_middle = np.sqrt((half_width - x)**2 + (half_height - y)**2)
 
-    modulus = modulus / np.sqrt(modulus_middle) * 5#  (modulus_middle/((half_width + half_height-2*step))) / 3
+    modulus = modulus / (5+np.sqrt(modulus_middle)) * 30  # (modulus_middle/((half_width + half_height-2*step))) / 3
     fx = modulus * np.cos(ang) #+ x modulus *
     fy = modulus * np.sin(ang) #+ y
     nextPts = np.vstack([x+fx, y+fy]).T
@@ -217,19 +223,24 @@ def get_flow_lk(img1, img2, step=100):
     #         fm.append(True)
     #     else:
     #         fm.append(False)
-    mask = np.not_equal(points, nextPts)
-    mask = mask.T  # mask.reshape(2, -1)
-    mask = (mask[0] | mask[1]) #& np.less(abs(ang_middle - ang), 90*np.pi / 180)
     # points = points[fm]
     # nextPts = nextPts[fm]
-    mask = np.where((modulus > np.mean(modulus)*0.9), mask, np.False_)  # + грубее, - чувствительнее
-    # np.where(modulus < 2 * np.mean(modulus), mask, np.False_)
-    points = points[mask]
-    nextPts = nextPts[mask]
-    modulus = modulus[mask]
-    ang = ang[mask]
+    mask = np.greater(modulus, np.median(modulus) * 1.2)
+    # op.open_images([img, draw_sparse_lamps(img.shape[:2], flow_m, points)], 'img flow')
+
+    # mask = np.not_equal(points, nextPts)
+    # mask = mask.T  # mask.reshape(2, -1)
+    # mask = (mask[0] | mask[1]) #& np.less(abs(ang_middle - ang), 90*np.pi / 180)
+    # mask = np.where((modulus > np.mean(modulus)*0.9), mask, np.False_)  # + грубее, - чувствительнее
+    # # np.where(modulus < 2 * np.mean(modulus), mask, np.False_)
+    mask_inv = ~mask
+    points, points_bad = points[mask], points[mask_inv]
+    nextPts, nextPts_bad = nextPts[mask], nextPts[mask_inv]
+    modulus, modulus_bad = modulus[mask], modulus[mask_inv]
+    ang, ang_bad = ang[mask], ang[mask_inv]
+
     flow = nextPts - points
-    lines = np.concatenate((points, nextPts), axis=1)
+    lines = np.concatenate((points, nextPts), axis=1) #  lines.shape = (-1, 4)
     rlines = lines.reshape(-1, 2, 2)
     # flines = []
     # for x0, y0, x1, y1 in lines:
@@ -237,12 +248,18 @@ def get_flow_lk(img1, img2, step=100):
     #         flines.append([x0, y0, x1, y1])
     # flines = np.array(flines)
     # rflines = flines.reshape(-1, 2, 2)
-    _ = cv2.polylines(frame_layer, rlines, False, (255, 0, 255))
+    _ = cv2.polylines(frame_layer, rlines, False, (0, 0, 255))
     # точки н-нада?
-    if 1:
-        for x1, y1, _x2, _y2 in lines:
-            cv2.circle(frame_layer, center=(x1, y1), radius=1, color=(255, 0, 255), thickness=1)
+    for x1, y1, _x2, _y2 in lines:
+        cv2.circle(frame_layer, center=(x1, y1), radius=1, color=(255, 0, 255), thickness=1)
     # flow = np.concatenate((flow, points), axis=1)
+
+    lines_bad = np.concatenate((points_bad, nextPts_bad), axis=1)
+    rlines_bad = lines_bad.reshape(-1, 2, 2)
+    _ = cv2.polylines(frame_layer, rlines_bad, False, (255, 255, 0,))
+    for x1, y1, _x2, _y2 in lines_bad:
+        cv2.circle(frame_layer, center=(x1, y1), radius=1, color=(255, 255, 0), thickness=1)
+
     return frame_layer, flow, points
 
 
@@ -275,8 +292,11 @@ def draw_sparse_lamps(img_shape, flow_, points):
     """Возвращает слой с радугой в цветовом пространстве hsv,
     где цвет - направление вектора, интенсивность - длинна вектора"""
     h, w = img_shape[:2]
-    fx, fy = flow_[:, 0], flow_[:, 1]
-
+    try:
+        fx, fy = flow_[:, 0], flow_[:, 1]
+    except TypeError:
+        print(type(flow_))
+        print('flow_ =', flow_)
     ang = np.arctan2(fy, fx) + np.pi
     modulus = np.sqrt(fx * fx + fy * fy)
 
@@ -284,7 +304,7 @@ def draw_sparse_lamps(img_shape, flow_, points):
     for (x, y), a, m in zip(points, ang, modulus):
         hsv[y, x, 0] = 0
         hsv[y, x, 1] = 255
-        hsv[y, x, 2] = np.minimum(125 + m * 2, 255)
+        hsv[y, x, 2] = np.minimum(50 + m * 2, 255)
     # hsv[..., 0] = ang * (180 / np.pi / 2)
     # hsv[..., 1] = 255
     # hsv[..., 2] = np.minimum(modulus * 4, 255)
@@ -292,7 +312,7 @@ def draw_sparse_lamps(img_shape, flow_, points):
     for x, y, in points:
         cv2.circle(bgr, center=(x, y), radius=6, color=(int(bgr[y, x, 0]), int(bgr[y, x, 1]), int(bgr[y, x, 2])),
                    thickness=-1)
-
+    # фильтровать по соседям и предидущему кадру с соседями
     return bgr
 
 
@@ -420,11 +440,11 @@ def draw_contours(img_grey, contour_length=150):
     return img_contours, contours_, hierarchy_
 
 
-match 1:  # СЮДА МЕНЯТЬ
+match 0:  # СЮДА МЕНЯТЬ
     case 0:
-        cap = cv2.VideoCapture(0)
-        start_frame = 100  #
-        viewing_angle = 361
+        cap = cv2.VideoCapture("./Полёт_со_скольжением.mp4")
+        start_frame = 0  #
+        viewing_angle = 155
     case 1:
         cap = cv2.VideoCapture("./PERFECT_BANDO_FPV_FREESTYLE.mp4")
         # будка с дыркой 400 620 640 дом 1000 1130 1200 завод 1440 1550 1600 1900 дверь 1990 ангар 2400 2500 крыша 2875
@@ -499,7 +519,7 @@ while go:
     if add_flow or add_hsv or show_hsv:
         flow = calculate_optical_flow(prev=prev_gray, next=gray)
     if add_sparse_flow or add_sparse_hsv:
-        sparse_flow_img, sparse_flow, sparse_points = get_flow_lk(prev_gray, gray, step=30)
+        sparse_flow_img, sparse_flow, sparse_points = get_flow_lk(prev_gray, gray, step=30) # 300
         # cv2.imshow('Sparse flow', sparse_flow_img)
 
     prev_gray = gray
@@ -556,9 +576,9 @@ while go:
         output_bgr = cv2.add(output_bgr, sparse_flow_img)
     if add_hsv:
         output_bgr = cv2.add(output_bgr, draw_hsv(flow))
-    if add_sparse_hsv:
+    if add_sparse_hsv and type(sparse_flow) is not None:
         output_bgr = cv2.add(output_bgr, draw_sparse_lamps(output_bgr.shape, sparse_flow, sparse_points))
-    if show_lamps:
+    if show_lamps and type(sparse_flow) is not None:
         cv2.imshow('lamps', draw_sparse_lamps(output_bgr.shape, sparse_flow, sparse_points))
     if show_hsv:
         cv2.imshow('flow HSV', cv2.add(draw_hsv(flow), draw_grid((height, width), colored_cross=True, cross=True, )))
@@ -579,7 +599,7 @@ while go:
 
     # разметка кадра
     output_bgr = cv2.add(output_bgr, draw_grid((height, width), 20,
-                                               colored_cross=True, viewing_angle_rect=False, cross=True,
+                                               colored_cross=True, viewing_angle_rect=True, cross=True,
                                                grid=False, blinds=True))
 
     # Управление с клавиатуры

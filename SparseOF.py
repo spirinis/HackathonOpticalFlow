@@ -17,7 +17,7 @@ detect_interval = 5
 trajectories = []
 frame_idx = 0
 
-cap = cv2.VideoCapture(0)
+cap = cv2.VideoCapture('PERFECT_BANDO_FPV_FREESTYLE.mp4')
 
 while True:
 
