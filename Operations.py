@@ -1,11 +1,12 @@
+import time
+from typing import List, SupportsInt
+
 import numpy as np
 import cv2
-import time
-from random import random
-import math
 
 
-def get_and_open_image(pos=(1000, 1800), to_open=False, source="./PERFECT_BANDO_FPV_FREESTYLE.mp4",):
+def get_and_open_image(pos: tuple[int, int] = (1000, 1800), to_open: bool = False,
+                       source: str = "./PERFECT_BANDO_FPV_FREESTYLE.mp4", ) -> List[np.ndarray] | np.ndarray | None:
     """Вернёт и откроет при условии перечисленные кадры"""
     cap = cv2.VideoCapture(source)
     if not hasattr(pos, '__iter__'):
@@ -17,7 +18,7 @@ def get_and_open_image(pos=(1000, 1800), to_open=False, source="./PERFECT_BANDO_
         if result:
             images.append(frame)
         else:
-            print('Потеряли кадр', p)
+            print(f'Потеряли кадр {p}')
             return
     if to_open:
         for p, image in zip(pos, images):
@@ -32,7 +33,7 @@ def get_and_open_image(pos=(1000, 1800), to_open=False, source="./PERFECT_BANDO_
     return images if len(images) > 1 else images[0]
 
 
-def resize_image(image, des_w=100, des_h=None, interpolation=cv2.INTER_AREA):
+def resize_image(image: np.ndarray, des_w=100, des_h: int = None, interpolation=cv2.INTER_AREA) -> np.ndarray:
     """Масштабирует переданную картинку по ширине или в требуемый размер"""
     # соотношение сторон: ширина, делённая на ширину оригинала
     aspect_ratio = des_w / image.shape[1]
@@ -47,10 +48,8 @@ def resize_image(image, des_w=100, des_h=None, interpolation=cv2.INTER_AREA):
     return resized_image
 
 
-
 def open_to_compare_images(i):
-    """Просто скрипт"""
-    # not (np.bitwise_xor(frame1, frame2).any())
+    """Скрипт гауссового размытия и бинаризации"""
     g = cv2.cvtColor(i, cv2.COLOR_BGR2GRAY)
 
     b3 = cv2.GaussianBlur(g, (3, 3), 0)
@@ -78,7 +77,7 @@ def open_images(images, names='Name'):
     if len(names) != number:
         names = [names[0]]
         for i in range(1, number):
-            names.append(names[0] + str(i))  # да не class 'str'
+            names.append(names[0] + str(i))
     for name, image in zip(names, images):
         cv2.imshow(name, image)
     while cv2.getWindowProperty(names[0], cv2.WND_PROP_VISIBLE) >= 1:
@@ -86,84 +85,6 @@ def open_images(images, names='Name'):
         if ch == 27:  # Esc
             break
     cv2.destroyAllWindows()
-
-
-def get_flow_lk(img1, img2, step=30):
-    # imgs = get_and_open_image((1440, 1441, 1460, 1461))
-    # img1 = imgs[0]
-    # img2 = imgs[1]
-    # step=100
-    h, w = img1.shape[:2]
-    frame_layer = np.zeros((h, w, 3), np.uint8)
-    points_grid = np.mgrid[step / 2:w:step, step / 2:h:step].astype(int)  # (2, 11, 19)
-    # points = points_grid.reshape(2, -1)
-    # points = points_grid.reshape(-1, 2).astype(np.float32)
-    points = []
-    for x, y in zip(points_grid[0].flatten(), points_grid[1].flatten()):
-        points.append([x, y])
-    points = np.array(points).astype(np.float32).reshape(-1, 2)
-    # (-1, 2), (-1, 1), (-1, 1)
-    nextPts, status, err = cv2.calcOpticalFlowPyrLK(img1, img2, points, None, winSize=(15, 15), maxLevel=2,
-                                                    criteria=(
-                                                    cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 0.03))
-    # nextPtsr, status, err = cv2.calcOpticalFlowPyrLK(img1, img2, points, None, winSize=(15, 15), maxLevel=2,
-    #                                                 criteria=(
-    #                                                     cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 0.03))
-    # d = abs(nextPts - nextPtsr).reshape(-1, 2).max(-1)
-    # good = d < 1
-    # nextPts = nextPts.reshape(points_grid.shape)  # (-1, 2) -> (2, 11, 19)
-    # nextPts00 = nextPts.reshape(-1, 2)
-    nextPts0 = nextPts
-    nextPts = np.int32(nextPts + 0.5)  # математическое округление
-    points = np.int32(points + 0.5)
-    # fm = []
-    # for (x0, y0), (x1, y1) in zip(points, nextPts):
-    #     if (x0 != x1) or (y0 != y1):
-    #         fm.append(True)
-    #     else:
-    #         fm.append(False)
-    # hist = cv2.calcHist([img], [0], None, [256], [0, 256])
-    flow_ = nextPts - points
-    fx, fy = flow_[:, 0], flow_[:, 1]
-    ang = np.arctan2(fy, fx) + np.pi
-    modulus = np.sqrt(fx * fx + fy * fy)
-
-    mask = np.not_equal(points, nextPts)
-    mask = mask.T  # mask.reshape(2, -1)
-    mask = mask[0] | mask[1]
-    # points = points[fm]
-    # nextPts = nextPts[fm]
-    mask = np.where(modulus < 2 * np.mean(modulus), mask, np.False_)
-    points = points[mask]
-    nextPts = nextPts[mask]
-    modulus = modulus[mask]
-    ang = ang[mask]
-    lines = np.concatenate((points, nextPts), axis=1)
-    rlines = lines.reshape(-1, 2, 2)
-    # flines = []
-    # for x0, y0, x1, y1 in lines:
-    #     if (x0 != x1) and (y0 != y1):
-    #         flines.append([x0, y0, x1, y1])
-    # flines = np.array(flines)
-    # rflines = flines.reshape(-1, 2, 2)
-    # точки н-нада?
-
-    if 1:
-        for (x1, y1, _x2, _y2), e in zip(lines, err):
-            cv2.circle(frame_layer, center=(x1, y1), radius=2, color=(255, 0, 255), thickness=1)
-            # if (e[0] < 100) and (e[0] > 100):
-            #     if e[0] > 0:
-            #         cv2.circle(frame_layer, center=(x1, y1), radius=int(e[0] // 2 + 1), color=(0, 0, 255), thickness=1)
-            #     elif e[0] < 0:
-            #         cv2.circle(frame_layer, center=(x1, y1), radius=int(e[0] // 2 + 1), color=(0, 255, 0), thickness=1)
-            # else:
-            #     if e[0] > 0:
-            #         cv2.circle(frame_layer, center=(x1, y1), radius=10, color=(255, 255, 0,), thickness=1)
-            #     elif e[0] < 0:
-            #         cv2.circle(frame_layer, center=(x1, y1), radius=10, color=(0, 255, 255,), thickness=1)
-    _ = cv2.polylines(frame_layer, rlines, False, (255, 0, 255))
-    # flow = np.concatenate((flow, points), axis=1)
-    return frame_layer, flow_, points, status, err
 
 
 def mark_points(img, points, to_draw=True, to_return=False):
@@ -174,7 +95,7 @@ def mark_points(img, points, to_draw=True, to_return=False):
         h, w = img.shape[:2]
     layer = np.zeros((h, w, 3), np.uint8)
     for x, y in points:
-        # assert (x - 7 > 0) and (y - 7 > 0), ''
+        assert (x - 7 > 0) and (y - 7 > 0)
         cv2.polylines(layer, np.int32([[[x - 7, y], [x + 7, y]], [[x, y - 7], [x, y + 7]]]), False, (0, 0, 255), 1)
     if to_draw:
         open_images(cv2.add(img, layer), 'fig')
@@ -196,9 +117,6 @@ def draw_sparse_hsv(img_shape, flow_, points):
         hsv[y, x, 0] = a * (180 / np.pi / 2)
         hsv[y, x, 1] = 255
         hsv[y, x, 2] = np.minimum(m * 4, 255)
-    # hsv[..., 0] = ang * (180 / np.pi / 2)
-    # hsv[..., 1] = 255
-    # hsv[..., 2] = np.minimum(modulus * 4, 255)
     bgr = cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)
     for x, y, in points:
         cv2.circle(bgr, center=(x, y), radius=6, color=(int(bgr[y, x, 0]), int(bgr[y, x, 1]), int(bgr[y, x, 2])),
@@ -207,8 +125,8 @@ def draw_sparse_hsv(img_shape, flow_, points):
     return bgr
 
 
-# Plot values in opencv program
 class Plotter:
+    """Строит интерактивный график в opencv"""
     def __init__(self, plot_width, plot_height, sample_buffer=None):
         self.width = plot_width
         self.height = plot_height
@@ -223,8 +141,8 @@ class Plotter:
         self.margin_d = 50
         self.sample_buffer = self.width if sample_buffer is None else sample_buffer
 
-    # Update new values in plot
-    def plot(self, val, label="plot"):
+    def plot(self, val: SupportsInt, label: str = "plot") -> None:
+        """Обновляет данные в графике"""
         if not label in self.plots:
             self.plots[label] = []
             self.plot_t_last[label] = 0
@@ -233,24 +151,28 @@ class Plotter:
         while len(self.plots[label]) > self.sample_buffer:
             self.plots[label].pop(0)
             self.show_plot(label)
-            # Show plot using opencv imshow
+            # Выводит график через opencv imshow
 
-    def show_plot(self, label):
-
+    def show_plot(self, label: str, time_bool=False) -> None:
+        """
+        Выводит график в отдельном окне
+        :param label: имя окна
+        :param time_bool: нужна ли строка времени на графике
+        """
         self.plot_canvas = np.zeros((self.height, self.width, 3)) * 255
         cv2.line(self.plot_canvas,
                  (self.margin_l, int((self.height - self.margin_d - self.margin_u) / 2) + self.margin_u), (
                  self.width - self.margin_r,
                  int((self.height - self.margin_d - self.margin_u) / 2) + self.margin_u), (0, 0, 255), 1)
 
-        # Scaling the graph in y within buffer
+        # Масштабирование графика по y в размер буфера
         scale_h_max = max(self.plots[label])
         scale_h_min = min(self.plots[label])
         scale_h_min = -scale_h_min if scale_h_min < 0 else scale_h_min
         scale_h = scale_h_max if scale_h_max > scale_h_min else scale_h_min
         scale_h = ((self.height - self.margin_d - self.margin_u) / 2) / scale_h if not scale_h == 0 else 0
 
-        for j, i in enumerate(np.linspace(0, self.sample_buffer - 2, self.width - self.margin_l - self.margin_r)):
+        for (j, i) in enumerate(np.linspace(0, self.sample_buffer - 2, self.width - self.margin_l - self.margin_r)):
             i = int(i)
             cv2.line(self.plot_canvas,
                      (j + self.margin_l,
@@ -261,9 +183,10 @@ class Plotter:
 
         cv2.rectangle(self.plot_canvas, (self.margin_l, self.margin_u),
                       (self.width - self.margin_r, self.height - self.margin_d), (255, 255, 255), 1)
-        # cv2.putText(self.plot_canvas,
-        #             f" {label} : {self.plots[label][-1]} , dt : {int((time.time() - self.plot_t_last[label]) * 1000)}ms",
-        #             (int(0), self.height - 20), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
+        if time_bool:  # строка времени на графике
+            cv2.putText(self.plot_canvas,
+                        f" {label} : {self.plots[label][-1]} , dt : {int((time.time() - self.plot_t_last[label]) * 1000)}ms",
+                        (int(0), self.height - 20), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
         cv2.circle(self.plot_canvas, (self.width - self.margin_r,
                                       int(self.margin_u + (self.height - self.margin_d - self.margin_u) / 2 -
                                           self.plots[label][-1] * scale_h)), 2, (0, 200, 200), -1)
@@ -277,18 +200,17 @@ class Plotter:
         cv2.destroyAllWindows()
 
 
-def draw_plot(values, label='graph'):
-    # Create dummy values using for loop
+def draw_plot(values: list, label: str = 'graph') -> None:
+    """Делает динамичный график не динамичным"""
     sample_buffer = len(values)-1
     p = Plotter(sample_buffer*2, 1080, sample_buffer=sample_buffer)
 
     for v in values:
         p.plot(v, label=label)
 
-    # p.plot(int(math.cos(v * 3.14 / 180) * 50), label='cos')
 
-
-def color_hsv_division(img1):
+def color_hsv_division(img1) -> None:
+    """скрипт для разбиения изображения по слоям и расчёта гистограмм"""
     img1_hsv = cv2.cvtColor(img1, cv2.COLOR_BGR2HSV)
     color = ('b', 'g', 'r')
     hists = []
@@ -306,31 +228,8 @@ def color_hsv_division(img1):
     open_images((img1, output_bgr), 'img1 output_bgr')
 
 
-# imgs = get_and_open_image((1440, 1441, 1460, 1461))
-# img1 = imgs[0]
-# img2 = imgs[1]
-# step = 100
-# frame_layer, flow, points, status, err = get_flow_lk(img1, img2, step=30)
-# # res = cv2.add(frame_layer, flow)
-# open_images((frame_layer,), 'frame_layer')
-
-
-
-def open_layer(layer, name='Name'):
-    """писал-писал, не дописал"""
-    h, w, depth = layer.shape
-    img = np.zeros((h, w, depth), np.uint8)
-    cv2.imshow(name, img)
-    while True:
-        ch = 0xFF & cv2.waitKey(1)  # Ждём секунду
-        if ch == 27:  # Esc
-            break
-    cv2.destroyAllWindows()
-
-
 def change_format():
-    """Поменяет разрешение видео вроде может быть"""
-    import time
+    """Поменяет разрешение видео"""
     import sys
 
     def rescale_frame(frame_input, percent=75):
@@ -348,7 +247,7 @@ def change_format():
         fourcc = cv2.VideoWriter_fourcc(*'mp4v')
         writer = cv2.VideoWriter('Video_output.mp4', fourcc, 15.0, (w, h), True)
     else:
-        print("Camera is not opened")
+        print("Камера не открыта")
         print("\\(-_-)/")
         sys.exit()
 
@@ -357,7 +256,7 @@ def change_format():
 
         rescaled_frame = rescale_frame(frame)
 
-        # write the output frame to file
+        # запись результирующего изображения в файл
         writer.write(rescaled_frame)
 
         cv2.imshow("Output", rescaled_frame)

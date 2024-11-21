@@ -1,0 +1,4 @@
+opencv-python~=4.10.0.84
+numpy~=2.1.1
+matplotlib~=3.9.2
+seaborn~=0.13.2

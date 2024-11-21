@@ -1,5 +1,8 @@
+import json
 import time
 import sys
+import logging.config
+import logging
 
 import numpy as np
 import cv2
@@ -28,6 +31,17 @@ match 5:  # Выбор видео
     case _:
         print("\\(-_-)/")
         sys.exit()
+
+with open("logging.conf") as file:
+    log_config = json.load(file)
+logging.config.dictConfig(log_config)
+# LOG_FORMAT = "%(asctime)s | %(levelname)s | %(message)s"
+# stream_handler = logging.StreamHandler()
+# stream_handler.setLevel(logging.INFO)
+# file_handler = logging.FileHandler(filename="logs/pathfinder_viewer.log", mode="w")
+# file_handler.setLevel(logging.INFO)
+# logging.basicConfig(level=logging.INFO, handlers=[stream_handler, file_handler], format=LOG_FORMAT)
+logging.info('Video file %s%s.mp4' % (path_to_video, video_name))
 cap = cv2.VideoCapture(f'{path_to_video}{video_name}.mp4')
 
 viewing_angle = 155
@@ -185,11 +199,13 @@ def draw_sparse_lamps(flow_: np.ndarray, points_: np.ndarray) -> np.ndarray:
     :param points_: точки измерений
     :return: BGR изображение препятствий
     """
+    logging.info('Функция %s' % __name__)
     try:
         fx, fy = flow_[:, 0], flow_[:, 1]
-    except TypeError:
+    except TypeError as e:
         print(type(flow_))
         print(f'flow_ = {flow_}')
+        logging.error('Ошибка %s' % e)
         raise TypeError
     ang = np.arctan2(fy, fx) + np.pi
     modulus = np.sqrt(fx * fx + fy * fy)
